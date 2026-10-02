@@ -1,29 +1,22 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Check, Wifi } from 'lucide-react'
 import { fetchLocations } from '../../api/locations.js'
+import { getApiErrorMessage } from '../../api/errors.js'
+import { fetchTests } from '../../api/tests.js'
+import RequestError from '../../components/RequestError.jsx'
+import { BlockSkeleton } from '../../components/Skeleton.jsx'
 import StatusBadge from '../../components/StatusBadge.jsx'
 import { useSpeedTest } from '../../hooks/useSpeedTest.js'
 
-const STAGES = [
-  { id: 'ping', label: 'Ping' },
-  { id: 'download', label: 'Download' },
-  { id: 'upload', label: 'Upload' },
+const VISUAL_STEPS = [
+  'Connecting',
+  'Measuring latency',
+  'Checking packet loss',
+  'Testing download',
+  'Testing upload',
+  'Calculating health score',
 ]
-
-function stageMarker(id, stage, hasError, demo) {
-  if (demo) return 'pending'
-  const order = STAGES.map((item) => item.id)
-  const index = order.indexOf(id)
-  const current = order.indexOf(stage)
-  if (hasError) {
-    if (current === index) return 'failed'
-    if (current > index) return 'complete'
-    return 'pending'
-  }
-  if (stage === 'saving' || stage === 'done') return 'complete'
-  if (current === index) return 'active'
-  if (current > index) return 'complete'
-  return 'pending'
-}
 
 function formatNumber(value) {
   const number = Number(value)
@@ -32,12 +25,47 @@ function formatNumber(value) {
   return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2)
 }
 
+function stepState(index, stage) {
+  if (!stage || stage === 'idle') return 'pending'
+  if (stage === 'done') return 'complete'
+  const activeIndex = { ping: 1, download: 3, upload: 4, saving: 5 }[stage]
+  if (activeIndex == null) return 'pending'
+  if (index < activeIndex) return 'complete'
+  if (index === activeIndex) return 'active'
+  return 'pending'
+}
+
+function Sparkline({ values, color }) {
+  const nums = (values || []).map(Number).filter((value) => Number.isFinite(value))
+  if (nums.length < 2) {
+    return <svg viewBox="0 0 80 24" className="h-6 w-20" aria-hidden="true"><line x1="0" y1="12" x2="80" y2="12" stroke={color} strokeOpacity="0.45" /></svg>
+  }
+  const min = Math.min(...nums)
+  const max = Math.max(...nums)
+  const span = max - min || 1
+  const points = nums.map((value, index) => {
+    const x = (index / (nums.length - 1)) * 80
+    const y = 22 - ((value - min) / span) * 20
+    return `${x},${y}`
+  }).join(' ')
+  return (
+    <svg viewBox="0 0 80 24" className="h-6 w-20" aria-hidden="true">
+      <polyline fill="none" stroke={color} strokeWidth="1.5" points={points} />
+    </svg>
+  )
+}
+
 export default function SpeedTestPage() {
-  const { stage, result, health, error, running, run } = useSpeedTest()
+  const navigate = useNavigate()
+  const { stage, result, health, error, running, run, cancel } = useSpeedTest()
   const [locations, setLocations] = useState([])
+  const [history, setHistory] = useState([])
   const [locationState, setLocationState] = useState('loading')
+  const [locationError, setLocationError] = useState('')
   const [locationId, setLocationId] = useState('')
+  const [fieldError, setFieldError] = useState('')
   const [demo, setDemo] = useState(false)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     document.title = 'CampusNet · Speed Test'
@@ -45,165 +73,189 @@ export default function SpeedTestPage() {
 
   useEffect(() => {
     let active = true
-    fetchLocations()
-      .then((list) => {
-        if (!active) return
-        setLocations(list)
-        setLocationId(list[0]?.id || '')
-        setLocationState(list.length ? 'ready' : 'empty')
-      })
-      .catch(() => {
-        if (!active) return
-        setLocationState('error')
-      })
+    Promise.allSettled([fetchLocations(), fetchTests()]).then(([locationResult, testResult]) => {
+      if (!active) return
+      const list = locationResult.status === 'fulfilled' ? locationResult.value : []
+      setLocations(list)
+      setLocationId((current) => (list.some((location) => location.id === current) ? current : list[0]?.id || ''))
+      setLocationError(locationResult.status === 'fulfilled' ? '' : getApiErrorMessage(locationResult.reason, 'Could not load locations.'))
+      setLocationState(locationResult.status === 'fulfilled' ? (list.length ? 'ready' : 'empty') : 'error')
+      setHistory(testResult.status === 'fulfilled' ? testResult.value : [])
+    })
     return () => {
       active = false
     }
-  }, [])
+  }, [attempt])
 
-  const cannotRun =
-    running || locationState === 'loading' || locationState === 'empty' || (locationState === 'ready' && !locationId)
+  const selected = locations.find((location) => location.id === locationId) || null
+  const series = useMemo(() => {
+    const rows = history.filter((test) => {
+      const id = test.locationId || test.location?.id || test.location?._id
+      return !selected || String(id) === String(selected.id)
+    }).slice(0, 8).reverse()
+    return {
+      ping: rows.map((row) => row.pingMs ?? row.ping),
+      download: rows.map((row) => row.downloadMbps ?? row.download),
+      upload: rows.map((row) => row.uploadMbps ?? row.upload),
+      loss: rows.map((row) => row.packetLoss),
+    }
+  }, [history, selected])
+
+  const cannotRun = running || locationState === 'loading'
+  const percent = stage === 'done' ? 100 : stage === 'saving' ? 90 : stage === 'upload' ? 72 : stage === 'download' ? 48 : stage === 'ping' ? 20 : 0
 
   function onRun() {
-    if (cannotRun) return
+    if (running || locationState === 'loading') return
+    if (locationState !== 'ready' || !locationId) {
+      setFieldError('Choose a location.')
+      return
+    }
+    setFieldError('')
     run({ locationId, demo })
   }
 
+  function onCancel() {
+    cancel()
+    navigate('/student/home')
+  }
+
+  const radius = 86
+  const circ = 2 * Math.PI * radius
+  const dash = circ * (1 - percent / 100)
+
   return (
-    <section className="max-w-3xl">
-      <h2 className="text-2xl font-semibold">Speed Test</h2>
-      <p className="mt-2 text-slate-400">Measure the campus connection from a location.</p>
-
-      <div className="mt-6">
-        <label className="block text-sm" htmlFor="location">
-          <span className="mb-1.5 block text-slate-300">Location</span>
-          {locationState === 'loading' ? <p className="text-slate-400">Loading locations…</p> : null}
-          {locationState === 'empty' ? (
-            <p className="text-slate-300" data-testid="no-locations">
-              no locations
-            </p>
-          ) : null}
-          {locationState === 'error' ? (
-            <p className="text-slate-400">Could not load locations.</p>
-          ) : null}
-          {locationState === 'ready' ? (
-            <select
-              id="location"
-              data-testid="location-select"
-              value={locationId}
-              onChange={(event) => setLocationId(event.target.value)}
-              disabled={running}
-              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100 outline-none ring-sky-400 focus:ring-2"
-            >
-              {locations.map((location) => (
-                <option key={location.id} value={location.id}>
-                  {location.name}
-                </option>
-              ))}
-            </select>
-          ) : null}
-        </label>
-      </div>
-
-      <p className="mt-6 text-sm" data-testid="stages">
-        {STAGES.map((item, index) => {
-          const marker = stageMarker(item.id, stage, Boolean(error), demo)
-          const tone =
-            marker === 'active'
-              ? 'text-sky-300'
-              : marker === 'complete'
-                ? 'text-slate-100'
-                : marker === 'failed'
-                  ? 'text-rose-300'
-                  : 'text-slate-500'
-          return (
-            <span key={item.id}>
-              {index > 0 ? <span className="text-slate-500"> → </span> : null}
-              <span data-stage={item.id} data-state={marker} className={`font-medium ${tone}`} aria-current={marker === 'active' ? 'step' : undefined}>
-                {item.label}
-              </span>
-            </span>
-          )
-        })}
+    <section>
+      <h2 className="text-3xl font-semibold uppercase leading-tight text-white">
+        Testing your
+        <span className="mt-1 block text-[#22d3ee]">campus connection...</span>
+      </h2>
+      <p className="mt-3 max-w-xl text-[#cbd5e1]">
+        This will only take a few seconds. Please keep this page open and don't close your browser.
       </p>
 
-      <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center">
-        <button
-          type="button"
-          data-testid="run-speed-test"
-          onClick={onRun}
-          disabled={cannotRun}
-          aria-busy={running}
-          className="rounded-lg bg-sky-400 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60"
-        >
-          {running ? 'Running…' : 'Run Speed Test'}
-        </button>
-        <label className="flex items-center gap-2 text-sm text-slate-300">
-          <input
-            type="checkbox"
-            data-testid="demo-metrics"
-            checked={demo}
-            disabled={running}
-            onChange={(event) => setDemo(event.target.checked)}
-          />
-          Demo metrics
-        </label>
+      <div className="mt-6 grid items-start gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(16rem,0.7fr)]">
+        <div className="rounded-2xl border border-[rgba(56,189,248,0.18)] bg-[#0c1829] p-6">
+          {locationState === 'loading' ? <BlockSkeleton className="mb-4 h-10" /> : null}
+          {locationState === 'empty' ? <p className="np-empty mb-4" data-testid="no-locations">no locations</p> : null}
+          {locationState === 'error' ? <RequestError message={locationError} onRetry={() => setAttempt((value) => value + 1)} /> : null}
+          {fieldError ? <p className="mb-4 text-sm text-rose-200" role="alert">{fieldError}</p> : null}
+          {locationState === 'ready' ? (
+            <label className="mb-4 block text-sm" htmlFor="location">
+              <span className="mb-1.5 block">Location</span>
+              <select
+                id="location"
+                data-testid="location-select"
+                value={locationId}
+                onChange={(event) => setLocationId(event.target.value)}
+                disabled={running}
+                className="w-full rounded-xl border border-[rgba(56,189,248,0.18)] bg-[#07111f] px-3 py-2 text-[#cbd5e1]"
+              >
+                {locations.map((location) => (
+                  <option key={location.id} value={location.id}>{location.name}</option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+
+          <div className="mx-auto grid h-56 w-56 place-items-center">
+            <svg viewBox="0 0 200 200" className="h-56 w-56">
+              <circle cx="100" cy="100" r={radius} fill="none" stroke="rgba(56,189,248,0.15)" strokeWidth="10" />
+              <circle
+                cx="100"
+                cy="100"
+                r={radius}
+                fill="none"
+                stroke="#22d3ee"
+                strokeWidth="10"
+                strokeLinecap="round"
+                strokeDasharray={circ}
+                strokeDashoffset={dash}
+                transform="rotate(-90 100 100)"
+              />
+            </svg>
+            <div className="-mt-40 text-center">
+              <Wifi aria-hidden="true" className="mx-auto text-[#22d3ee]" size={28} />
+              <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#94a3b8]">{running ? 'Testing' : 'Ready'}</p>
+              <p className="text-3xl font-semibold text-white">{percent}%</p>
+            </div>
+          </div>
+
+          <ol className="mt-8 space-y-2" data-testid="stages">
+            {VISUAL_STEPS.map((label, index) => {
+              const marker = error ? 'pending' : stepState(index, stage)
+              const color = marker === 'active' ? 'text-[#22d3ee]' : marker === 'complete' ? 'text-white' : marker === 'failed' ? 'text-[#f87171]' : 'text-[#94a3b8]'
+              return (
+                <li key={label} className={`flex items-center gap-2 text-sm ${color}`} data-state={marker}>
+                  {marker === 'complete' ? <Check size={14} aria-hidden="true" /> : <span className="inline-block h-3.5 w-3.5 rounded-full border border-current" />}
+                  {label}
+                </li>
+              )
+            })}
+          </ol>
+
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              data-testid="run-speed-test"
+              onClick={onRun}
+              disabled={cannotRun}
+              aria-busy={running}
+              className="inline-flex items-center gap-2 bg-sky-400 px-4 py-2 text-sm disabled:opacity-60"
+            >
+              <Wifi aria-hidden="true" size={16} />
+              {running ? 'Running…' : 'Test my Wi-Fi'}
+            </button>
+            <button type="button" className="rounded-full border border-[rgba(56,189,248,0.18)] px-4 py-2 text-sm text-[#cbd5e1]" onClick={onCancel}>
+              Cancel Test
+            </button>
+            <label className="flex items-center gap-2 text-sm text-[#cbd5e1]">
+              <input type="checkbox" data-testid="demo-metrics" checked={demo} disabled={running} onChange={(event) => setDemo(event.target.checked)} />
+              Demo metrics
+            </label>
+          </div>
+          {error ? (
+            <p className="mt-4 text-sm text-[#f87171]" role="alert" data-testid="speed-error">{error}</p>
+          ) : null}
+        </div>
+
+        <div className="space-y-3" data-testid="result-card">
+          {[
+            ['Ping', result?.pingMs, 'ms', series.ping, '#fbbf24', 'result-ping'],
+            ['Download', result?.downloadMbps, 'Mbps', series.download, '#22d3ee', 'result-download'],
+            ['Upload', result?.uploadMbps, 'Mbps', series.upload, '#38bdf8', 'result-upload'],
+            ['Packet loss', result?.packetLoss, '%', series.loss, '#f87171', 'result-loss'],
+          ].map(([label, value, unit, spark, color, testId]) => (
+            <div key={label} className="flex items-center justify-between rounded-2xl border border-[rgba(56,189,248,0.18)] bg-[#0c1829] px-4 py-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#94a3b8]">{label}</p>
+                <p className="text-xl font-semibold text-white" data-testid={testId}>{formatNumber(value)} {unit}</p>
+              </div>
+              <Sparkline values={spark} color={color} />
+            </div>
+          ))}
+          <div className="rounded-2xl border border-[rgba(56,189,248,0.18)] bg-[#0c1829] px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#94a3b8]">Health</p>
+            <div className="mt-1" data-testid="result-health">{health ? <StatusBadge status={health} /> : '—'}</div>
+          </div>
+          {!result && !running ? <p className="np-empty">No result yet.</p> : null}
+        </div>
+
+        <aside className="rounded-2xl border border-[rgba(56,189,248,0.18)] bg-[#0c1829] p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#94a3b8]">Current location</p>
+          {locationState === 'loading' ? <BlockSkeleton className="mt-3 h-24" /> : null}
+          {selected ? (
+            <dl className="mt-3 space-y-2 text-sm">
+              <div><dt>Building</dt><dd className="text-white">{selected.building || '—'}</dd></div>
+              <div><dt>Campus</dt><dd className="text-white">Mehran University, Jamshoro</dd></div>
+              <div><dt>Access point</dt><dd className="text-white">{selected.name}</dd></div>
+              <div><dt>Network name</dt><dd className="text-white">Campus Network</dd></div>
+            </dl>
+          ) : null}
+          {locationState !== 'loading' && !selected ? <p className="np-empty mt-3">No location selected.</p> : null}
+          <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#94a3b8]">Quick tips</p>
+          <p className="mt-2 text-sm text-[#cbd5e1]">Stay close to the Wi-Fi router and avoid heavy downloads.</p>
+        </aside>
       </div>
-      <p className="mt-2 text-xs text-slate-500">Demo metrics: download 36, upload 14, ping 28, packet loss 1.</p>
-
-      {error ? (
-        <p
-          className="mt-6 rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200"
-          role="alert"
-          data-testid="speed-error"
-        >
-          {error}
-        </p>
-      ) : null}
-
-      {result ? (
-        <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-4" data-testid="result-card">
-          <h3 className="text-sm font-medium text-slate-300">Result</h3>
-          <dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
-            <div>
-              <dt className="text-xs text-slate-500">Download</dt>
-              <dd className="mt-1 text-lg font-semibold" data-testid="result-download">
-                {formatNumber(result.downloadMbps)} Mbps
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs text-slate-500">Upload</dt>
-              <dd className="mt-1 text-lg font-semibold" data-testid="result-upload">
-                {formatNumber(result.uploadMbps)} Mbps
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs text-slate-500">Ping</dt>
-              <dd className="mt-1 text-lg font-semibold" data-testid="result-ping">
-                {formatNumber(result.pingMs)} ms
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs text-slate-500">Jitter</dt>
-              <dd className="mt-1 text-lg font-semibold" data-testid="result-jitter">
-                {result.jitterMs == null ? '—' : `${formatNumber(result.jitterMs)} ms`}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs text-slate-500">Packet loss</dt>
-              <dd className="mt-1 text-lg font-semibold" data-testid="result-loss">
-                {formatNumber(result.packetLoss)}%
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs text-slate-500">Health</dt>
-              <dd className="mt-1" data-testid="result-health">
-                {health ? <StatusBadge status={health} /> : '—'}
-              </dd>
-            </div>
-          </dl>
-        </section>
-      ) : null}
     </section>
   )
 }

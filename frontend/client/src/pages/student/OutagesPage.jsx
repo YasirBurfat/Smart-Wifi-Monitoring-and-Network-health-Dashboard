@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
+import { getApiErrorMessage } from '../../api/errors.js'
 import { fetchOutages, isOpenOutage, outageLocationName } from '../../api/outages.js'
 import { fetchTests } from '../../api/tests.js'
 import { readHealth } from '../../api/tests.js'
+import RequestError from '../../components/RequestError.jsx'
+import { BlockSkeleton } from '../../components/Skeleton.jsx'
 import StatusBadge from '../../components/StatusBadge.jsx'
 
 function formatWhen(value) {
@@ -14,8 +17,11 @@ function formatWhen(value) {
 export default function OutagesPage() {
   const [latest, setLatest] = useState(null)
   const [statusState, setStatusState] = useState('loading')
+  const [statusError, setStatusError] = useState('')
   const [outages, setOutages] = useState([])
   const [outageState, setOutageState] = useState('loading')
+  const [outageError, setOutageError] = useState('')
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     document.title = 'CampusNet · Outages'
@@ -30,26 +36,32 @@ export default function OutagesPage() {
           (left, right) => new Date(right.createdAt || 0) - new Date(left.createdAt || 0),
         )[0]
         setLatest(newest || null)
+        setStatusError('')
         setStatusState('ready')
       })
-      .catch(() => {
+      .catch((err) => {
         if (!active) return
-        setStatusState('empty')
+        setLatest(null)
+        setStatusError(getApiErrorMessage(err, 'Could not load your latest test.'))
+        setStatusState('error')
       })
     fetchOutages()
       .then((list) => {
         if (!active) return
         setOutages(list.filter(isOpenOutage))
+        setOutageError('')
         setOutageState('ready')
       })
-      .catch(() => {
+      .catch((err) => {
         if (!active) return
-        setOutageState('empty')
+        setOutages([])
+        setOutageError(getApiErrorMessage(err, 'Could not load outages.'))
+        setOutageState('error')
       })
     return () => {
       active = false
     }
-  }, [])
+  }, [attempt])
 
   const health = latest ? readHealth(latest) : null
 
@@ -60,8 +72,9 @@ export default function OutagesPage() {
 
       <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-4" data-testid="recent-status">
         <h3 className="text-sm font-medium text-slate-300">Recent status</h3>
-        {statusState === 'loading' ? <p className="mt-3 text-sm text-slate-400">Loading status…</p> : null}
-        {statusState !== 'loading' && !latest ? <p className="mt-3 text-sm text-slate-400">No recent tests.</p> : null}
+        {statusState === 'loading' ? <BlockSkeleton className="mt-3 h-16" /> : null}
+        {statusState === 'error' ? <RequestError message={statusError} onRetry={() => setAttempt((value) => value + 1)} /> : null}
+        {statusState === 'ready' && !latest ? <p className="np-empty mt-3">No recent tests.</p> : null}
         {latest ? (
           <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
             {health ? <StatusBadge status={health} /> : <span className="text-slate-400">No health yet</span>}
@@ -74,9 +87,10 @@ export default function OutagesPage() {
 
       <section className="mt-4" data-testid="outage-list">
         <h3 className="text-sm font-medium text-slate-300">Outages</h3>
-        {outageState === 'loading' ? <p className="mt-3 text-sm text-slate-400">Loading outages…</p> : null}
-        {outageState !== 'loading' && outages.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-400">No current outages.</p>
+        {outageState === 'loading' ? <BlockSkeleton className="mt-3 h-16" /> : null}
+        {outageState === 'error' ? <RequestError message={outageError} onRetry={() => setAttempt((value) => value + 1)} /> : null}
+        {outageState === 'ready' && outages.length === 0 ? (
+          <p className="np-empty mt-3">No current outages.</p>
         ) : null}
         {outages.length > 0 ? (
           <ul className="mt-3 space-y-2">

@@ -10,6 +10,7 @@ const { applyLocationFilters, applyCreatedRange } = require('../utils/filters');
 const { COMPLAINT_STATUSES, STAFF_ROLES } = require('../utils/constants');
 const { logActivity } = require('../services/activity.service');
 const { evaluateOutage } = require('../services/outage.service');
+const { notifyStaff, notifyUser, safeNotify } = require('../services/notification.service');
 const { exactTypeFilter, escapeRegex } = require('../utils/text');
 
 const POPULATE = [
@@ -102,6 +103,7 @@ const create = asyncHandler(async (req, res) => {
     user: req.user._id,
     location: location._id,
     type,
+    severity: body.severity || 'medium',
     description,
     status: 'Submitted',
     relatedTest: relatedTest ? relatedTest._id : null,
@@ -111,8 +113,16 @@ const create = asyncHandler(async (req, res) => {
   await logActivity(req.user._id, 'create', 'Complaint', complaint._id, {
     location: location._id,
     type,
+    severity: complaint.severity,
     outageId: outage ? outage._id : null,
   });
+  await safeNotify(() => notifyStaff({
+    title: 'New complaint',
+    body: `${type} reported at ${location.name}.`,
+    kind: 'complaint',
+    entity: 'Complaint',
+    entityId: complaint._id,
+  }));
 
   await complaint.populate(POPULATE);
   res.status(201).json({
@@ -173,6 +183,32 @@ const updateStatus = asyncHandler(async (req, res) => {
     to: status,
     assignedTo: complaint.assignedTo,
   });
+  if (status === 'Resolved') {
+    await safeNotify(() => notifyUser(complaint.user, {
+      title: 'Complaint resolved',
+      body: `Your ${complaint.type} report was resolved.`,
+      kind: 'complaint',
+      entity: 'Complaint',
+      entityId: complaint._id,
+    }));
+  } else {
+    await safeNotify(() => notifyUser(complaint.user, {
+      title: 'Complaint updated',
+      body: `Your ${complaint.type} report moved from ${from} to ${status}.`,
+      kind: 'complaint',
+      entity: 'Complaint',
+      entityId: complaint._id,
+    }));
+  }
+  if (status === 'Assigned' && complaint.assignedTo) {
+    await safeNotify(() => notifyUser(complaint.assignedTo, {
+      title: 'Complaint assigned',
+      body: `${complaint.type} was assigned to you.`,
+      kind: 'assignment',
+      entity: 'Complaint',
+      entityId: complaint._id,
+    }));
+  }
   await complaint.populate(POPULATE);
   res.json({ ok: true, complaint: presentComplaint(complaint) });
 });
@@ -192,6 +228,13 @@ const assign = asyncHandler(async (req, res) => {
   await logActivity(req.user._id, 'update', 'Complaint', complaint._id, {
     assignedTo: assignee._id,
   });
+  await safeNotify(() => notifyUser(assignee._id, {
+    title: 'Complaint assigned',
+    body: `${complaint.type} was assigned to you.`,
+    kind: 'assignment',
+    entity: 'Complaint',
+    entityId: complaint._id,
+  }));
   await complaint.populate(POPULATE);
   res.json({ ok: true, complaint: presentComplaint(complaint) });
 });

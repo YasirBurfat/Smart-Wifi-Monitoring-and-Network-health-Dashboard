@@ -1,7 +1,8 @@
 const ROLES = ['student', 'it', 'manager', 'admin'];
 const STAFF_ROLES = ['it', 'manager', 'admin'];
 const LOCATION_WRITE_ROLES = ['admin', 'manager'];
-const ACCOUNT_STATUSES = ['active', 'disabled'];
+const ACCOUNT_STATUSES = ['active', 'inactive', 'disabled'];
+const SEVERITIES = ['low', 'medium', 'high', 'critical'];
 const BANDS = ['Excellent', 'Good', 'Fair', 'Poor', 'Critical'];
 const LOCATION_STATUSES = [...BANDS, 'Unknown'];
 const COMPLAINT_STATUSES = ['Submitted', 'Reviewed', 'Assigned', 'In Progress', 'Resolved'];
@@ -49,6 +50,7 @@ module.exports = {
   STAFF_ROLES,
   LOCATION_WRITE_ROLES,
   ACCOUNT_STATUSES,
+  SEVERITIES,
   BANDS,
   LOCATION_STATUSES,
   COMPLAINT_STATUSES,

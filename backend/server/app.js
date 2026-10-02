@@ -15,6 +15,9 @@ const outageRoutes = require('./routes/outage.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
 const analyticsRoutes = require('./routes/analytics.routes');
 const aiRoutes = require('./routes/ai.routes');
+const settingsRoutes = require('./routes/settings.routes');
+const logRoutes = require('./routes/log.routes');
+const notificationRoutes = require('./routes/notification.routes');
 
 const app = express();
 
@@ -55,6 +58,9 @@ app.use('/api/outages', outageRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/logs', logRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

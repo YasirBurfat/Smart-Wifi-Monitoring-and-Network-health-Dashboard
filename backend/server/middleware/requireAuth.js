@@ -16,7 +16,8 @@ async function requireAuth(req, _res, next) {
       throw new ApiError(401, 'Authentication required');
     }
     if (user.accountStatus !== 'active') {
-      throw new ApiError(403, 'Account is disabled');
+      const label = user.accountStatus === 'inactive' ? 'inactive' : 'disabled';
+      throw new ApiError(403, `Account is ${label}`);
     }
 
     req.user = user;

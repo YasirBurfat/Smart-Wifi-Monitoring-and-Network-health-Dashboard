@@ -23,6 +23,8 @@ const idParams = requestSchema({
   params: z.object({ id: objectId }),
 });
 
+const emptySchema = requestSchema();
+
 module.exports = {
   z,
   objectId,
@@ -30,4 +32,5 @@ module.exports = {
   paging,
   requestSchema,
   idParams,
+  emptySchema,
 };

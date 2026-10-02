@@ -25,17 +25,37 @@ const thresholdSchema = new mongoose.Schema(
 
 const outageRuleSchema = new mongoose.Schema(
   {
-    minComplaints: { type: Number, default: DEFAULT_OUTAGE_RULE.minComplaints },
-    windowMinutes: { type: Number, default: DEFAULT_OUTAGE_RULE.windowMinutes },
+    minComplaints: { type: Number, required: true, default: DEFAULT_OUTAGE_RULE.minComplaints, min: 1 },
+    windowMinutes: { type: Number, required: true, default: DEFAULT_OUTAGE_RULE.windowMinutes, min: 1 },
   },
   { _id: false }
 );
 
+const weightSchema = new mongoose.Schema(
+  {
+    download: { type: Number, required: true, default: 30, min: 0 },
+    upload: { type: Number, required: true, default: 15, min: 0 },
+    ping: { type: Number, required: true, default: 25, min: 0 },
+    packetLoss: { type: Number, required: true, default: 20, min: 0 },
+    stability: { type: Number, required: true, default: 10, min: 0 },
+  },
+  { _id: false }
+);
+
+const DEFAULT_WEIGHTS = {
+  download: 30,
+  upload: 15,
+  ping: 25,
+  packetLoss: 20,
+  stability: 10,
+};
+
 const settingSchema = new mongoose.Schema(
   {
     key: { type: String, required: true, unique: true, default: 'default' },
-    thresholds: { type: thresholdSchema, default: () => ({ ...DEFAULT_THRESHOLDS }) },
-    outageRule: { type: outageRuleSchema, default: () => ({ ...DEFAULT_OUTAGE_RULE }) },
+    thresholds: { type: thresholdSchema, required: true, default: () => ({ ...DEFAULT_THRESHOLDS }) },
+    weights: { type: weightSchema, required: true, default: () => ({ ...DEFAULT_WEIGHTS }) },
+    outageRule: { type: outageRuleSchema, required: true, default: () => ({ ...DEFAULT_OUTAGE_RULE }) },
   },
   { timestamps: true }
 );

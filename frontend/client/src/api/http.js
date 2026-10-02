@@ -1,7 +1,7 @@
 import axios from 'axios'
-import { readToken } from './storage.js'
+import { clearSession, readToken } from './storage.js'
 
-const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+const baseURL = import.meta.env.VITE_API_URL
 
 export const http = axios.create({
   baseURL,
@@ -16,3 +16,19 @@ http.interceptors.request.use((config) => {
   }
   return config
 })
+
+http.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status
+    const url = String(error?.config?.url || '')
+    const authAttempt = url.includes('/api/auth/login') || url.includes('/api/auth/register')
+    if (status === 401 && !authAttempt) {
+      clearSession()
+      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+        window.location.assign('/login')
+      }
+    }
+    return Promise.reject(error)
+  },
+)

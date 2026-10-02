@@ -100,6 +100,16 @@ async function refreshLocationStatus(locationId, actorId) {
       sampleSize: recent.length,
     });
   }
+  if (currentStatus === 'Poor' || currentStatus === 'Critical') {
+    const { notifyStaff, safeNotify } = require('./notification.service');
+    await safeNotify(() => notifyStaff({
+      title: 'Poor location',
+      body: `${location.name} health is ${currentStatus}.`,
+      kind: 'poor_location',
+      entity: 'Location',
+      entityId: location._id,
+    }));
+  }
   return location;
 }
 

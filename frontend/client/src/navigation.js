@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   Gauge,
   History,
+  House,
   LayoutDashboard,
   LineChart,
   MapPin,
@@ -28,10 +29,10 @@ export const ROLE_PREFIX = {
 }
 
 const managerLinks = [
-  { slug: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { slug: 'dashboard', label: 'Overview', icon: LayoutDashboard },
+  { slug: 'locations', label: 'Network', icon: MapPin },
   { slug: 'analytics', label: 'Analytics', icon: LineChart },
-  { slug: 'locations', label: 'Locations', icon: MapPin },
-  { slug: 'insights', label: 'AI Insights', icon: Sparkles },
+  { slug: 'insights', label: 'AI', icon: Sparkles },
 ]
 
 function withPrefix(prefix, links) {
@@ -44,28 +45,31 @@ function withPrefix(prefix, links) {
 
 export const MENUS = {
   student: [
-    { to: '/student/speed-test', label: 'Speed Test', icon: Gauge },
+    { to: '/student/home', label: 'Home', icon: House },
+    { to: '/student/speed-test', label: 'Test Wi-Fi', icon: Gauge },
+    { to: '/student/complaints', label: 'Report', icon: MessageSquareWarning },
     { to: '/student/history', label: 'History', icon: History },
-    { to: '/student/complaints', label: 'Complaints', icon: MessageSquareWarning },
     { to: '/student/outages', label: 'Outages', icon: AlertTriangle },
   ],
   it: [
-    { to: '/it/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/it/complaints', label: 'Complaints', icon: MessageSquareWarning },
-    { to: '/it/tests', label: 'Tests', icon: Activity },
+    { to: '/it/dashboard', label: 'Overview', icon: LayoutDashboard },
+    { to: '/it/tests', label: 'Network', icon: Activity },
+    { to: '/it/complaints', label: 'Incidents', icon: MessageSquareWarning },
     { to: '/it/outages', label: 'Outages', icon: AlertTriangle },
+    { to: '/it/analytics', label: 'Analytics', icon: LineChart },
+    { to: '/it/insights', label: 'AI', icon: Sparkles },
   ],
   manager: withPrefix('/manager', managerLinks),
   admin: [
     ...withPrefix('/admin', managerLinks),
     { to: '/admin/users', label: 'Users', icon: Users },
     { to: '/admin/settings', label: 'Settings', icon: Settings },
-    { to: '/admin/logs', label: 'Logs', icon: ScrollText },
+    { to: '/admin/logs', label: 'Activity Log', icon: ScrollText },
   ],
 }
 
 export const ROLE_HOME = {
-  student: '/student/speed-test',
+  student: '/student/home',
   it: '/it/dashboard',
   manager: '/manager/dashboard',
   admin: '/admin/dashboard',

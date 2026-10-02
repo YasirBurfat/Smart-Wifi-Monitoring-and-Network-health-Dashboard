@@ -35,6 +35,18 @@ async function evaluateOutage(complaint, actorId) {
         type: complaint.type,
         location: complaint.location,
       });
+      try {
+        const { notifyStaff } = require('./notification.service');
+        await notifyStaff({
+          title: 'Outage updated',
+          body: `${complaint.type} is now ${count} complaints in ${windowMinutes} minutes.`,
+          kind: 'outage',
+          entity: 'Outage',
+          entityId: existing._id,
+        });
+      } catch (err) {
+        console.error('Failed to write outage notification');
+      }
     }
     return existing;
   }
@@ -54,6 +66,18 @@ async function evaluateOutage(complaint, actorId) {
       complaintCount: count,
       windowMinutes,
     });
+    try {
+      const { notifyStaff } = require('./notification.service');
+      await notifyStaff({
+        title: 'Outage opened',
+        body: `${complaint.type} reached ${count} complaints in ${windowMinutes} minutes.`,
+        kind: 'outage',
+        entity: 'Outage',
+        entityId: outage._id,
+      });
+    } catch (err) {
+      console.error('Failed to write outage notification');
+    }
     return outage;
   } catch (err) {
     if (err.code !== 11000) throw err;

@@ -108,6 +108,7 @@ function presentComplaint(complaint) {
     location: presentLocationRef(complaint.location),
     locationId: complaint.location && complaint.location._id ? complaint.location._id : complaint.location,
     type: complaint.type,
+    severity: complaint.severity || 'medium',
     description: complaint.description,
     status: complaint.status,
     relatedTest: presentTestRef(complaint.relatedTest),

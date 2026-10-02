@@ -6,21 +6,13 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { getApiErrorMessage } from '../api/errors.js'
 import { canOpenPath, homeForRole } from '../navigation.js'
 
-const DEMO_ACCOUNTS = [
-  { role: 'student', label: 'Student', email: 'student@campus.test' },
-  { role: 'it', label: 'IT', email: 'it@campus.test' },
-  { role: 'manager', label: 'Manager', email: 'manager@campus.test' },
-  { role: 'admin', label: 'Admin', email: 'admin@campus.test' },
-]
-
-const DEMO_PASSWORD = 'password123'
-
 export default function LoginPage() {
   const { login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [fieldErrors, setFieldErrors] = useState({})
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
 
@@ -41,36 +33,36 @@ export default function LoginPage() {
 
   function onSubmit(event) {
     event.preventDefault()
-    if (!email.trim() || !password) {
-      setError('Enter your email and password.')
+    const next = {}
+    if (!email.trim()) next.email = 'Enter your email.'
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) next.email = 'Enter a valid email.'
+    if (!password) next.password = 'Enter your password.'
+    setFieldErrors(next)
+    if (Object.keys(next).length) {
+      setError('')
       return
     }
     signIn(email, password)
   }
 
-  function useDemo(account) {
-    setEmail(account.email)
-    setPassword(DEMO_PASSWORD)
-    signIn(account.email, DEMO_PASSWORD)
-  }
-
   return (
     <AuthScreen title="Sign in">
       <h2 className="text-2xl font-semibold">Sign in</h2>
-      <p className="mt-2 text-sm text-slate-400">Use your campus account to open CampusNet.</p>
+      <p className="mt-2 text-sm text-[#cbd5e1]">Use your campus account to open NetPulse Campus.</p>
       {location.state?.registered ? (
         <p className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200" role="status">
           Account created. Sign in with your email.
         </p>
       ) : null}
-      <form onSubmit={onSubmit} className="mt-6 space-y-4">
+      <form onSubmit={onSubmit} className="mt-6 space-y-4" autoComplete="off">
         <TextField
           label="Email"
           type="email"
           name="email"
-          autoComplete="username"
+          autoComplete="off"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
+          error={fieldErrors.email}
           required
         />
         <TextField
@@ -80,6 +72,7 @@ export default function LoginPage() {
           autoComplete="current-password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
+          error={fieldErrors.password}
           required
         />
         {error ? (
@@ -101,25 +94,6 @@ export default function LoginPage() {
           Create an account
         </Link>
       </p>
-      <div className="mt-8">
-        <p className="text-sm font-medium text-slate-200">Demo accounts</p>
-        <p className="mt-1 text-xs text-slate-400">Password for every demo account: {DEMO_PASSWORD}</p>
-        <div className="mt-3 grid gap-2">
-          {DEMO_ACCOUNTS.map((account) => (
-            <button
-              key={account.role}
-              type="button"
-              disabled={pending}
-              data-testid={`demo-${account.role}`}
-              onClick={() => useDemo(account)}
-              className="rounded-lg border border-slate-700 px-3 py-2 text-left text-sm hover:bg-slate-900 disabled:opacity-60"
-            >
-              <span className="font-medium text-slate-100">{account.label}</span>
-              <span className="mt-0.5 block text-slate-400">{account.email}</span>
-            </button>
-          ))}
-        </div>
-      </div>
     </AuthScreen>
   )
 }

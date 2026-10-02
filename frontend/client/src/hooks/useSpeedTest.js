@@ -203,6 +203,15 @@ export function useSpeedTest() {
     }
   }, [])
 
+  const cancel = useCallback(() => {
+    abortRef.current?.abort()
+    abortRef.current = null
+    if (!mountedRef.current) return
+    setRunning(false)
+    setStage('idle')
+    setError('')
+  }, [])
+
   const run = useCallback(async ({ locationId, demo }) => {
     abortRef.current?.abort()
     const controller = new AbortController()
@@ -221,38 +230,46 @@ export function useSpeedTest() {
       let metrics
       if (demo) {
         metrics = { ...DEMO_METRICS }
+        setResult(metrics)
       } else {
         const ping = await measurePing(controller.signal)
         if (!alive()) return
         if (ping.packetLoss >= 100 || ping.pingMs == null) throw new Error('loss')
         if (offline()) throw new Error('offline')
+        const pingMetrics = {
+          pingMs: roundTo(ping.pingMs, 2),
+          jitterMs: roundTo(ping.jitterMs, 2),
+          packetLoss: roundTo(ping.packetLoss, 2),
+        }
+        setResult(pingMetrics)
 
         setStage('download')
         const downloadMbps = await measureDownload(controller.signal)
         if (!alive()) return
         if (offline()) throw new Error('offline')
+        const downloadMetrics = { ...pingMetrics, downloadMbps: roundTo(downloadMbps, 2) }
+        setResult(downloadMetrics)
 
         setStage('upload')
         const uploadMbps = await measureUpload(controller.signal)
         if (!alive()) return
         if (offline()) throw new Error('offline')
-
-        metrics = {
-          downloadMbps: roundTo(downloadMbps, 2),
-          uploadMbps: roundTo(uploadMbps, 2),
-          pingMs: roundTo(ping.pingMs, 2),
-          jitterMs: roundTo(ping.jitterMs, 2),
-          packetLoss: roundTo(ping.packetLoss, 2),
-        }
+        metrics = { ...downloadMetrics, uploadMbps: roundTo(uploadMbps, 2) }
+        setResult(metrics)
       }
 
-      if (!alive()) return
-      setResult(metrics)
+      if (!alive() || offline()) {
+        if (offline() && alive()) throw new Error('offline')
+        return
+      }
       setStage('saving')
-      const saved = await createTest({
-        ...metrics,
-        ...(locationId ? { locationId } : {}),
-      })
+      const saved = await createTest(
+        {
+          ...metrics,
+          ...(locationId ? { locationId } : {}),
+        },
+        { signal: controller.signal },
+      )
       if (!alive()) return
       setHealth(readHealth(saved))
       setStage('done')
@@ -260,11 +277,12 @@ export function useSpeedTest() {
       if (!mountedRef.current || controller.signal.aborted || isAbort(errorCaught)) return
       setResult(null)
       setHealth(null)
+      setStage('idle')
       setError(SPEED_TEST_ERROR)
     } finally {
       if (mountedRef.current && abortRef.current === controller) setRunning(false)
     }
   }, [])
 
-  return { stage, result, health, error, running, run }
+  return { stage, result, health, error, running, run, cancel }
 }

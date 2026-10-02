@@ -4,7 +4,7 @@ const { SPEEDTEST_MAX_MB } = require('../utils/constants');
 
 function download(req, res, next) {
   try {
-    const raw = req.query.size;
+    const raw = req.validated?.query?.size ?? req.query.size;
     let megabytes = raw == null || raw === '' ? 1 : Number(raw);
     if (!Number.isFinite(megabytes) || megabytes <= 0) {
       throw new ApiError(400, `size must be a positive number of megabytes (max ${SPEEDTEST_MAX_MB})`);

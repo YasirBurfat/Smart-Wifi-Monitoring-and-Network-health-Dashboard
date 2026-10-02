@@ -14,13 +14,21 @@ export default function RegisterPage() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [fieldErrors, setFieldErrors] = useState({})
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
 
   async function onSubmit(event) {
     event.preventDefault()
-    if (!name.trim() || !email.trim() || !password) {
-      setError('Enter your name, email, and password.')
+    const next = {}
+    if (name.trim().length < 2) next.name = 'Enter your name.'
+    if (!email.trim()) next.email = 'Enter your email.'
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) next.email = 'Enter a valid email.'
+    if (!password) next.password = 'Enter a password.'
+    else if (password.length < 8) next.password = 'Use at least 8 characters.'
+    setFieldErrors(next)
+    if (Object.keys(next).length) {
+      setError('')
       return
     }
 
@@ -49,22 +57,24 @@ export default function RegisterPage() {
     <AuthScreen title="Create account">
       <h2 className="text-2xl font-semibold">Create account</h2>
       <p className="mt-2 text-sm text-slate-400">New accounts are students.</p>
-      <form onSubmit={onSubmit} className="mt-6 space-y-4">
+      <form onSubmit={onSubmit} className="mt-6 space-y-4" autoComplete="off">
         <TextField
           label="Name"
           name="name"
           autoComplete="name"
           value={name}
           onChange={(event) => setName(event.target.value)}
+          error={fieldErrors.name}
           required
         />
         <TextField
           label="Email"
           type="email"
           name="email"
-          autoComplete="username"
+          autoComplete="off"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
+          error={fieldErrors.email}
           required
         />
         <TextField
@@ -74,6 +84,7 @@ export default function RegisterPage() {
           autoComplete="new-password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
+          error={fieldErrors.password}
           required
         />
         <p className="text-sm text-slate-400">Role: Student</p>

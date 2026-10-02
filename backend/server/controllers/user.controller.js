@@ -5,6 +5,14 @@ const { publicUser } = require('../utils/publicUser');
 const { getPaging, pageMeta } = require('../utils/pagination');
 const { logActivity } = require('../services/activity.service');
 
+const staff = asyncHandler(async (_req, res) => {
+  const users = await User.find({
+    role: { $in: ['it', 'manager', 'admin'] },
+    accountStatus: 'active',
+  }).sort({ name: 1 });
+  res.json({ ok: true, users: users.map(publicUser) });
+});
+
 const list = asyncHandler(async (req, res) => {
   const { page, limit, skip } = getPaging(req.validated.query);
   const [users, total] = await Promise.all([
@@ -50,6 +58,10 @@ const update = asyncHandler(async (req, res) => {
 
   if (roleChanged || statusChanged) {
     await user.save();
+    await logActivity(req.user._id, 'update', 'User', user._id, {
+      from: previous,
+      to: { role: user.role, accountStatus: user.accountStatus },
+    });
   }
   if (roleChanged) {
     await logActivity(req.user._id, 'role_change', 'User', user._id, {
@@ -67,4 +79,4 @@ const update = asyncHandler(async (req, res) => {
   res.json({ ok: true, user: publicUser(user) });
 });
 
-module.exports = { list, create, update };
+module.exports = { staff, list, create, update };

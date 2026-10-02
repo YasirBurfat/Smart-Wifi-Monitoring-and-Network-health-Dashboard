@@ -1,7 +1,8 @@
 const TILE = {
-  Green: '#22c55e',
-  Yellow: '#eab308',
-  Red: '#ef4444',
+  Green: '#34d399',
+  Yellow: '#fbbf24',
+  Red: '#f87171',
+  Poor: '#fb923c',
 }
 
 export function heatmapColor(location) {
@@ -10,7 +11,8 @@ export function heatmapColor(location) {
   const value = raw.toLowerCase()
   if (value === 'excellent' || value === 'good' || value === 'green') return TILE.Green
   if (value === 'fair' || value === 'yellow') return TILE.Yellow
-  if (value === 'poor' || value === 'critical' || value === 'red') return TILE.Red
+  if (value === 'poor') return TILE.Poor
+  if (value === 'critical' || value === 'red') return TILE.Red
   return '#334155'
 }
 
@@ -31,7 +33,7 @@ function positionOf(mapPosition, index) {
 export default function CampusHeatmap({ locations }) {
   const placed = (locations || []).filter((location) => location.mapPosition != null)
   if (placed.length === 0) {
-    return <p className="text-sm text-slate-400">No map data.</p>
+    return <p className="np-empty">No map data.</p>
   }
 
   const cells = placed.map((location, index) => ({ location, ...positionOf(location.mapPosition, index) }))
@@ -47,7 +49,7 @@ export default function CampusHeatmap({ locations }) {
         {cells.map((cell) => (
           <g key={cell.location.id} transform={`translate(${cell.x * size + 4} ${cell.y * size + 4})`}>
             <rect width="48" height="48" rx="8" fill={heatmapColor(cell.location)} />
-            <text x="24" y="28" textAnchor="middle" fontSize="9" fill="#0f172a">
+            <text x="24" y="28" textAnchor="middle" fontSize="9" fill="#041018">
               {cell.location.name.slice(0, 10)}
             </text>
           </g>

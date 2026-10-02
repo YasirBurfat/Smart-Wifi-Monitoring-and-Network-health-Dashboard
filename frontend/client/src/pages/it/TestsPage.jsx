@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
+import { getApiErrorMessage } from '../../api/errors.js'
 import { fetchLocations } from '../../api/locations.js'
 import { fetchTestPage } from '../../api/tests.js'
 import { fieldClass } from '../../components/formStyles.js'
+import RequestError from '../../components/RequestError.jsx'
+import { WidgetSkeleton } from '../../components/Skeleton.jsx'
 import StatusBadge from '../../components/StatusBadge.jsx'
 import { STATUS_LEVELS } from '../../status.js'
 
@@ -56,6 +59,8 @@ export default function TestsPage() {
   const [page, setPage] = useState(1)
   const [pages, setPages] = useState(0)
   const [state, setState] = useState('loading')
+  const [error, setError] = useState('')
+  const [attempt, setAttempt] = useState(0)
   const [filters, setFilters] = useState({ locationId: '', building: '', status: '', date: '' })
 
   useEffect(() => {
@@ -87,17 +92,18 @@ export default function TestsPage() {
         setPages(result.pages)
         setState('ready')
       })
-      .catch(() => {
+      .catch((err) => {
         if (!active) return
         setRows([])
         setTotal(0)
         setPages(0)
+        setError(getApiErrorMessage(err, 'Could not load tests.'))
         setState('error')
       })
     return () => {
       active = false
     }
-  }, [filters, page])
+  }, [filters, page, attempt])
 
   const buildings = [...new Set(locations.map((location) => location.building).filter(Boolean))]
   const filtersActive = Boolean(filters.locationId || filters.building || filters.status || filters.date)
@@ -173,14 +179,10 @@ export default function TestsPage() {
         </label>
       </div>
 
-      {state === 'loading' ? <p className="mt-6 text-sm text-slate-400">Loading tests…</p> : null}
-      {state === 'error' ? (
-        <p className="mt-6 rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200" role="alert">
-          Could not load tests.
-        </p>
-      ) : null}
+      {state === 'loading' ? <WidgetSkeleton label="Loading tests…" /> : null}
+      {state === 'error' ? <RequestError message={error} onRetry={() => setAttempt((value) => value + 1)} /> : null}
       {state === 'ready' && rows.length === 0 ? (
-        <p className="mt-6 text-sm text-slate-400" data-testid="tests-empty">
+        <p className="np-empty mt-6" data-testid="tests-empty">
           {filtersActive ? 'No tests match these filters.' : 'No tests yet.'}
         </p>
       ) : null}

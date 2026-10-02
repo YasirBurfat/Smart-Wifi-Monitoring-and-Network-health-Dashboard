@@ -1,9 +1,17 @@
 export const STATUS_LEVELS = ['Excellent', 'Good', 'Fair', 'Poor', 'Critical']
 
+export const STATUS_COLOR = {
+  Excellent: '#34d399',
+  Good: '#34d399',
+  Fair: '#fbbf24',
+  Poor: '#fb923c',
+  Critical: '#f87171',
+}
+
 export const STATUS_STYLES = {
-  Excellent: 'bg-emerald-500/15 text-emerald-300 ring-emerald-400/40',
-  Good: 'bg-green-500/15 text-green-300 ring-green-400/40',
-  Fair: 'bg-yellow-400/15 text-yellow-200 ring-yellow-300/40',
-  Poor: 'bg-orange-500/15 text-orange-300 ring-orange-400/40',
-  Critical: 'bg-red-500/15 text-red-300 ring-red-400/40',
+  Excellent: 'bg-[#34d399]/15 text-[#34d399] ring-[#34d399]/40',
+  Good: 'bg-[#34d399]/15 text-[#34d399] ring-[#34d399]/40',
+  Fair: 'bg-[#fbbf24]/15 text-[#fbbf24] ring-[#fbbf24]/40',
+  Poor: 'bg-[#fb923c]/15 text-[#fb923c] ring-[#fb923c]/40',
+  Critical: 'bg-[#f87171]/15 text-[#f87171] ring-[#f87171]/40',
 }

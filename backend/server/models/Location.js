@@ -7,10 +7,10 @@ const locationSchema = new mongoose.Schema(
     building: { type: String, required: true, trim: true, maxlength: 120 },
     floor: { type: String, trim: true, default: '', maxlength: 40 },
     description: { type: String, trim: true, default: '', maxlength: 2000 },
-    currentStatus: { type: String, enum: LOCATION_STATUSES, default: 'Unknown' },
+    currentStatus: { type: String, enum: LOCATION_STATUSES, default: 'Unknown', required: true },
     mapPosition: {
-      x: { type: Number, default: 0 },
-      y: { type: Number, default: 0 },
+      x: { type: Number, required: true, default: 0 },
+      y: { type: Number, required: true, default: 0 },
     },
   },
   { timestamps: true }

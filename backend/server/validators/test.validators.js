@@ -15,6 +15,8 @@ const createTestSchema = requestSchema({
     pingMs: metric.optional(),
     packetLoss: loss,
     jitterMs: metric.optional(),
+    failed: z.boolean().optional(),
+    completed: z.boolean().optional(),
   }).superRefine((value, ctx) => {
     if (value.download == null && value.downloadMbps == null) {
       ctx.addIssue({ code: 'custom', path: ['download'], message: 'download is required' });

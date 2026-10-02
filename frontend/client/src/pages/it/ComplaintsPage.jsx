@@ -3,32 +3,39 @@ import {
   COMPLAINT_STATUSES,
   COMPLAINT_TYPES,
   addComplaintNote,
+  assignComplaint,
   fetchComplaints,
   updateComplaintStatus,
 } from '../../api/complaints.js'
+import { getApiErrorMessage } from '../../api/errors.js'
 import { fetchLocations } from '../../api/locations.js'
+import { fetchStaff } from '../../api/users.js'
 import { fieldClass } from '../../components/formStyles.js'
+import RequestError from '../../components/RequestError.jsx'
+import { WidgetSkeleton } from '../../components/Skeleton.jsx'
 
 const STATUS_ORDER = 'Submitted → Reviewed → Assigned → In Progress → Resolved'
 
-function formatWhen(value) {
-  if (!value) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  return date.toLocaleString()
+function nextStatus(current) {
+  const index = COMPLAINT_STATUSES.indexOf(current)
+  if (index < 0 || index >= COMPLAINT_STATUSES.length - 1) return ''
+  return COMPLAINT_STATUSES[index + 1]
 }
 
 export default function ItComplaintsPage() {
   const [complaints, setComplaints] = useState([])
   const [locations, setLocations] = useState([])
+  const [staff, setStaff] = useState([])
   const [state, setState] = useState('loading')
-  const [filters, setFilters] = useState({ locationId: '', type: '', status: '' })
+  const [filters, setFilters] = useState({ locationId: '', type: '', status: '', date: '' })
   const [selectedId, setSelectedId] = useState('')
-  const [status, setStatus] = useState('Submitted')
-  const [assignee, setAssignee] = useState('')
+  const [assigneeId, setAssigneeId] = useState('')
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
+  const [listError, setListError] = useState('')
+  const [noteError, setNoteError] = useState('')
   const [pending, setPending] = useState(false)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     document.title = 'CampusNet · Complaints'
@@ -36,23 +43,24 @@ export default function ItComplaintsPage() {
 
   useEffect(() => {
     let active = true
-    Promise.allSettled([fetchComplaints(), fetchLocations()]).then(([complaintResult, locationResult]) => {
+    Promise.allSettled([fetchComplaints(filters), fetchLocations(), fetchStaff()]).then(([complaintResult, locationResult, staffResult]) => {
       if (!active) return
       setComplaints(complaintResult.status === 'fulfilled' ? complaintResult.value : [])
       setLocations(locationResult.status === 'fulfilled' ? locationResult.value : [])
+      setStaff(staffResult.status === 'fulfilled' ? staffResult.value : [])
+      setListError(complaintResult.status === 'fulfilled' ? '' : getApiErrorMessage(complaintResult.reason, 'Could not load complaints.'))
       setState(complaintResult.status === 'fulfilled' ? 'ready' : 'error')
     })
     return () => {
       active = false
     }
-  }, [])
+  }, [filters, attempt])
 
   const selected = complaints.find((complaint) => complaint.id === selectedId) || null
 
   useEffect(() => {
     if (!selected) return
-    setStatus(COMPLAINT_STATUSES.includes(selected.status) ? selected.status : 'Submitted')
-    setAssignee(selected.assignee || '')
+    setAssigneeId(selected.assignedToId || '')
     setNote('')
     setError('')
   }, [selected])
@@ -66,34 +74,51 @@ export default function ItComplaintsPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [selectedId])
 
-  const visible = useMemo(() => {
-    return complaints.filter((complaint) => {
-      if (filters.locationId && complaint.locationId !== filters.locationId) return false
-      if (filters.type && complaint.type !== filters.type) return false
-      if (filters.status && complaint.status !== filters.status) return false
-      return true
-    })
-  }, [complaints, filters])
+  const visible = useMemo(() => complaints, [complaints])
 
   function replaceComplaint(next) {
     setComplaints((current) => current.map((item) => (item.id === next.id ? { ...item, ...next } : item)))
   }
 
-  async function onUpdateStatus(event) {
+  async function onMoveStatus(event) {
     event.preventDefault()
     if (!selected) return
+    const status = nextStatus(selected.status)
+    if (!status) return
+    if (status === 'Assigned' && !assigneeId && !selected.assignedToId) {
+      setError('Assign a staff member before moving this complaint to Assigned.')
+      return
+    }
     setPending(true)
     setError('')
     try {
-      const updated = await updateComplaintStatus(selected.id, { status, assignee })
-      const hasContent = Boolean(updated?.description || updated?.type)
-      replaceComplaint(
-        hasContent
-          ? { ...selected, ...updated, id: selected.id }
-          : { ...selected, status, assignee, id: selected.id },
-      )
-    } catch {
-      setError('Could not update the complaint.')
+      const payload = { status }
+      if (status === 'Assigned' && (assigneeId || selected.assignedToId)) {
+        payload.assigneeId = assigneeId || selected.assignedToId
+      }
+      const updated = await updateComplaintStatus(selected.id, payload)
+      if (updated?.id) replaceComplaint({ ...selected, ...updated, id: selected.id })
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Could not update the complaint.'))
+    } finally {
+      setPending(false)
+    }
+  }
+
+  async function onAssign(event) {
+    event.preventDefault()
+    if (!selected) return
+    if (!assigneeId) {
+      setError('Choose a staff member.')
+      return
+    }
+    setPending(true)
+    setError('')
+    try {
+      const updated = await assignComplaint(selected.id, { assigneeId })
+      if (updated?.id) replaceComplaint({ ...selected, ...updated, id: selected.id })
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Could not assign the complaint.'))
     } finally {
       setPending(false)
     }
@@ -101,19 +126,19 @@ export default function ItComplaintsPage() {
 
   async function onAddNote(event) {
     event.preventDefault()
-    if (!selected || !note.trim()) return
+    if (!selected || !note.trim()) {
+      setNoteError('Enter a note.')
+      return
+    }
+    setNoteError('')
     setPending(true)
     setError('')
-    const text = note.trim()
     try {
-      await addComplaintNote(selected.id, text)
-      replaceComplaint({
-        ...selected,
-        notes: [...(selected.notes || []), { id: `local-${Date.now()}`, note: text, createdAt: new Date().toISOString() }],
-      })
+      const updated = await addComplaintNote(selected.id, note.trim())
+      if (updated?.id) replaceComplaint({ ...selected, ...updated, id: selected.id })
       setNote('')
-    } catch {
-      setError('Could not add the note.')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Could not add the note.'))
     } finally {
       setPending(false)
     }
@@ -124,7 +149,7 @@ export default function ItComplaintsPage() {
       <h2 className="text-2xl font-semibold">Complaints</h2>
       <p className="mt-2 text-sm text-slate-400">{STATUS_ORDER}</p>
 
-      <div className="mt-6 grid gap-3 sm:grid-cols-3">
+      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label className="block text-sm">
           <span className="mb-1.5 block text-slate-400">Location</span>
           <select
@@ -173,16 +198,22 @@ export default function ItComplaintsPage() {
             ))}
           </select>
         </label>
+        <label className="block text-sm">
+          <span className="mb-1.5 block text-slate-400">Date</span>
+          <input
+            type="date"
+            className={fieldClass}
+            data-testid="it-filter-date"
+            value={filters.date}
+            onChange={(event) => setFilters((current) => ({ ...current, date: event.target.value }))}
+          />
+        </label>
       </div>
 
-      {state === 'loading' ? <p className="mt-6 text-sm text-slate-400">Loading complaints…</p> : null}
-      {state === 'error' ? (
-        <p className="mt-6 text-sm text-rose-200" role="alert">
-          Could not load complaints.
-        </p>
-      ) : null}
+      {state === 'loading' ? <WidgetSkeleton label="Loading complaints…" /> : null}
+      {state === 'error' ? <RequestError message={listError} onRetry={() => setAttempt((value) => value + 1)} /> : null}
       {state === 'ready' && visible.length === 0 ? (
-        <p className="mt-6 text-sm text-slate-400">No complaints match these filters.</p>
+        <p className="np-empty mt-6">No complaints match these filters.</p>
       ) : null}
       {state === 'ready' && visible.length > 0 ? (
         <ul className="mt-6 space-y-3" data-testid="it-complaint-list">
@@ -222,41 +253,39 @@ export default function ItComplaintsPage() {
               </button>
             </div>
             <p className="mt-4 text-sm text-slate-200">{selected.description}</p>
+            <p className="mt-2 text-xs text-slate-500">Severity {selected.severity || 'medium'}</p>
             <p className="mt-4 text-xs text-slate-500">{STATUS_ORDER}</p>
-            <form onSubmit={onUpdateStatus} className="mt-4 space-y-3">
+            <p className="mt-2 text-sm">Current status: {selected.status}</p>
+            <form onSubmit={onAssign} className="mt-4 space-y-3">
               <label className="block text-sm">
-                <span className="mb-1.5 block text-slate-400">Status</span>
-                <select className={fieldClass} data-testid="status-select" value={status} onChange={(event) => setStatus(event.target.value)}>
-                  {COMPLAINT_STATUSES.map((statusName) => (
-                    <option key={statusName} value={statusName}>
-                      {statusName}
+                <span className="mb-1.5 block text-slate-400">Assign staff</span>
+                <select className={fieldClass} data-testid="assignee-input" value={assigneeId} onChange={(event) => setAssigneeId(event.target.value)}>
+                  <option value="">Select staff</option>
+                  {staff.map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.name} ({person.role})
                     </option>
                   ))}
                 </select>
               </label>
-              <label className="block text-sm">
-                <span className="mb-1.5 block text-slate-400">Assign staff</span>
-                <input
-                  className={fieldClass}
-                  data-testid="assignee-input"
-                  value={assignee}
-                  onChange={(event) => setAssignee(event.target.value)}
-                />
-              </label>
-              <button
-                type="submit"
-                data-testid="update-status"
-                disabled={pending}
-                className="rounded-lg bg-sky-400 px-3 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60"
-              >
-                Update status
+              <button type="submit" data-testid="assign-staff" disabled={pending} className="rounded-lg border border-slate-700 px-3 py-2 text-sm disabled:opacity-60">
+                Assign
               </button>
+            </form>
+            <form onSubmit={onMoveStatus} className="mt-4">
+              {nextStatus(selected.status) ? (
+                <button type="submit" data-testid="update-status" disabled={pending} className="rounded-lg bg-sky-400 px-3 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60">
+                  Move to {nextStatus(selected.status)}
+                </button>
+              ) : (
+                <p className="text-sm text-slate-400">This complaint is resolved.</p>
+              )}
             </form>
             <form onSubmit={onAddNote} className="mt-6 space-y-3">
               <h4 className="text-sm font-medium">Notes</h4>
-              {selected.notes.length === 0 ? <p className="text-sm text-slate-500">No notes yet.</p> : null}
+              {(selected.notes || []).length === 0 ? <p className="text-sm text-slate-500">No notes yet.</p> : null}
               <ul className="space-y-2" data-testid="note-list">
-                {selected.notes.map((item) => (
+                {(selected.notes || []).map((item) => (
                   <li key={item.id} className="rounded-lg border border-slate-800 px-3 py-2 text-sm">
                     {item.note}
                   </li>
@@ -265,11 +294,12 @@ export default function ItComplaintsPage() {
               <label className="block text-sm">
                 <span className="mb-1.5 block text-slate-400">Add note</span>
                 <textarea className={`${fieldClass} min-h-20`} data-testid="note-input" value={note} onChange={(event) => setNote(event.target.value)} />
+                {noteError ? <p className="mt-1 text-sm text-rose-200" role="alert">{noteError}</p> : null}
               </label>
               <button
                 type="submit"
                 data-testid="add-note"
-                disabled={pending || !note.trim()}
+                disabled={pending}
                 className="rounded-lg border border-slate-700 px-3 py-2 text-sm disabled:opacity-60"
               >
                 Add note

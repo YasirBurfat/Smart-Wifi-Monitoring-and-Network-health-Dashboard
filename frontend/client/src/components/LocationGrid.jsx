@@ -7,7 +7,7 @@ function formatMetric(value, unit) {
 
 export default function LocationGrid({ locations }) {
   if (!locations?.length) {
-    return <p className="text-sm text-slate-400">No locations to show.</p>
+    return <p className="np-empty">No locations to show.</p>
   }
 
   return (

@@ -11,7 +11,6 @@ export async function registerRequest({ name, email, password }) {
     name,
     email,
     password,
-    role: 'student',
   })
   return data
 }

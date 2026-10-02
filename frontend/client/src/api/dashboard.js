@@ -13,7 +13,9 @@ function normalizeHourly(list) {
     .map((point) => ({
       label: String(point?.label || point?.hour || point?.time || point?.date || ''),
       download: Number(point?.download ?? point?.downloadMbps ?? point?.avgDownload ?? 0) || 0,
+      upload: numberOrNull(point?.upload ?? point?.uploadMbps ?? point?.averageUpload ?? point?.avgUpload),
       ping: Number(point?.ping ?? point?.pingMs ?? point?.avgPing ?? 0) || 0,
+      packetLoss: numberOrNull(point?.packetLoss ?? point?.averagePacketLoss),
     }))
     .filter((point) => point.label)
 }
@@ -53,4 +55,24 @@ export function normalizeSummary(data) {
 export async function fetchSummary() {
   const { data } = await http.get('/api/dashboard/summary')
   return normalizeSummary(data)
+}
+
+export async function fetchHeatmap() {
+  const { data } = await http.get('/api/dashboard/heatmap')
+  const list = Array.isArray(data?.locations) ? data.locations : []
+  return list.map(normalizeLocation).filter(Boolean)
+}
+
+export async function fetchTrends() {
+  const { data } = await http.get('/api/dashboard/trends')
+  const days = Array.isArray(data?.days) ? data.days : []
+  return days
+    .map((day) => ({
+      label: String(day?.date || day?.label || ''),
+      download: Number(day?.averageDownload ?? day?.download ?? 0) || 0,
+      upload: numberOrNull(day?.averageUpload ?? day?.upload),
+      ping: Number(day?.averagePing ?? day?.ping ?? 0) || 0,
+      packetLoss: numberOrNull(day?.averagePacketLoss ?? day?.packetLoss),
+    }))
+    .filter((point) => point.label)
 }

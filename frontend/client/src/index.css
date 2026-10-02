@@ -1,1 +1,114 @@
 @import "tailwindcss";
+
+@theme {
+  --color-slate-950: #050910;
+  --color-slate-900: #0c1829;
+  --color-slate-800: #10243a;
+  --color-slate-100: #f8fafc;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #cbd5e1;
+  --color-sky-400: #22d3ee;
+  --color-sky-300: #67e8f9;
+  --color-sky-200: #a5f3fc;
+  --color-emerald-300: #34d399;
+  --color-emerald-200: #34d399;
+  --color-emerald-400: #34d399;
+  --color-green-300: #34d399;
+  --color-yellow-200: #fbbf24;
+  --color-yellow-300: #fbbf24;
+  --color-orange-300: #fb923c;
+  --color-red-300: #f87171;
+  --color-rose-300: #f87171;
+  --color-rose-200: #fca5a5;
+}
+
+html {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  color: #cbd5e1;
+  background: linear-gradient(180deg, #050910 0%, #07111f 100%);
+  background-attachment: fixed;
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  color: #ffffff;
+}
+
+label > span,
+dt,
+th {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.border-slate-700,
+.border-slate-800 {
+  border-color: rgba(56, 189, 248, 0.18);
+}
+
+.bg-slate-900,
+.bg-slate-900\/60,
+.bg-slate-900\/80 {
+  background-color: #0c1829;
+}
+
+.rounded-2xl.border,
+.rounded-xl.border-slate-800 {
+  background-color: #0c1829;
+  border-color: rgba(56, 189, 248, 0.18);
+  border-radius: 16px;
+}
+
+button.bg-sky-400,
+a.bg-sky-400 {
+  border-radius: 9999px;
+  background-color: transparent;
+  background-image: linear-gradient(90deg, #22d3ee, #2563eb);
+  box-shadow: 0 0 18px rgba(34, 211, 238, 0.35);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  border-color: rgba(56, 189, 248, 0.18);
+  background-color: #07111f;
+  color: #cbd5e1;
+}
+
+.np-empty {
+  border: 1px solid rgba(56, 189, 248, 0.18);
+  border-radius: 16px;
+  background: #0c1829;
+  color: #94a3b8;
+  padding: 1rem 1.1rem;
+  font-size: 0.875rem;
+}
+
+@media (max-width: 375px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .np-location {
+    flex: 1 1 100%;
+  }
+}

@@ -19,3 +19,8 @@ export async function fetchOutages() {
   if (Array.isArray(data?.outages)) return data.outages
   return []
 }
+
+export async function updateOutage(id, status) {
+  const { data } = await http.patch(`/api/outages/${id}`, { status })
+  return data?.outage || data
+}

@@ -21,6 +21,9 @@ function ownsRecord(user, owner) {
 
 const create = asyncHandler(async (req, res) => {
   const body = req.validated.body;
+  if (body.failed === true || body.completed === false) {
+    throw new ApiError(400, 'A failed speed test is not stored');
+  }
   const { locationId, packetLoss } = body;
   const download = body.download ?? body.downloadMbps;
   const upload = body.upload ?? body.uploadMbps;

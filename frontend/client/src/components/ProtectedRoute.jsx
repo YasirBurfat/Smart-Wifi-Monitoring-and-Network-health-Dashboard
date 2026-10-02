@@ -8,6 +8,6 @@ export default function ProtectedRoute({ roles }) {
 
   if (!ready) return <LoadingScreen />
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />
-  if (roles && !roles.includes(user.role)) return <Navigate to="/unauthorized" replace />
+  if (roles && !roles.includes(user.role)) return <Navigate to="/403" replace />
   return <Outlet />
 }

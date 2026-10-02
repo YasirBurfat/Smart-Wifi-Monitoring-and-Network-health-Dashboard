@@ -1,12 +1,13 @@
 const { z, objectId, dateQuery, paging, requestSchema, idParams } = require('./common');
-const { COMPLAINT_STATUSES } = require('../utils/constants');
+const { COMPLAINT_STATUSES, COMPLAINT_CATEGORIES, SEVERITIES } = require('../utils/constants');
 
 const typeField = z.string().trim().min(2).max(80);
 
 const createComplaintSchema = requestSchema({
   body: z.object({
     locationId: objectId,
-    type: typeField,
+    type: z.enum(COMPLAINT_CATEGORIES),
+    severity: z.enum(SEVERITIES).optional().default('medium'),
     description: z.string().trim().min(3).max(5000),
     relatedTestId: objectId.optional(),
     testId: objectId.optional(),

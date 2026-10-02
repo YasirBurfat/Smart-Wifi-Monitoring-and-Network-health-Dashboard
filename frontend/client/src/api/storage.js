@@ -53,8 +53,15 @@ export function readUser() {
 }
 
 export function writeSession(token, user) {
+  const account = {
+    id: user.id != null ? String(user.id) : user._id != null ? String(user._id) : undefined,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    accountStatus: user.accountStatus,
+  }
   storageSet(TOKEN_KEY, token)
-  storageSet(USER_KEY, JSON.stringify(user))
+  storageSet(USER_KEY, JSON.stringify(account))
 }
 
 export function clearSession() {

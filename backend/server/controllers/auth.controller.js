@@ -44,7 +44,8 @@ const login = asyncHandler(async (req, res) => {
     throw new ApiError(401, 'Invalid email or password');
   }
   if (user.accountStatus !== 'active') {
-    throw new ApiError(403, 'Account is disabled');
+    const label = user.accountStatus === 'inactive' ? 'inactive' : 'disabled';
+    throw new ApiError(403, `Account is ${label}`);
   }
 
   res.json({ ok: true, token: signToken(user), user: publicUser(user) });

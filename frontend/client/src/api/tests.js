@@ -18,8 +18,8 @@ export async function fetchTests(params) {
   return page.tests
 }
 
-export async function createTest(metrics) {
-  const { data } = await http.post('/api/tests', metrics)
+export async function createTest(metrics, config) {
+  const { data } = await http.post('/api/tests', metrics, config)
   return data
 }
 
